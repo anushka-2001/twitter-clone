@@ -1,0 +1,94 @@
+name: GitHub Pages
+on:
+    push:
+        branches:
+            - "main"
+        paths:
+            - ".github/workflows/**"
+            - "public/**"
+            - "src/**"
+            - "package.json"
+            - "package-lock.json"
+    pull_request:
+        branches:
+            - "main"
+    workflow_dispatch:
+
+jobs:
+    build-website:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              run: |
+                  # Set repository Url
+                  REPOSITORY_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+                  BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+
+                  # Clone repository
+                  git clone --depth 2 -b "${BRANCH_NAME}" --no-single-branch "${REPOSITORY_URL}" .
+
+                  # Don't switch to gh-pages if not on main
+                  if [ "${BRANCH_NAME}" == "main" ]; then
+                      # Switch to gh-pages branch
+                      if ! git show-branch remotes/origin/gh-pages; then
+                          # If the branch doesn't exist, then create an orphan branch
+                          echo "Could not find gh-pages branch, creating as orphan"
+                          git switch --orphan gh-pages
+                      else
+                          # Else, switch to the branch
+                          echo "Creating gh-pages branch as an orphan branch"
+                          git switch gh-pages
+                      fi
+                      
+                      # Delete all old files
+                      rm -rf *
+
+                      # Get latest source and buildscript
+                      git restore -s "${BRANCH_NAME}" public src package-lock.json package.json
+                  fi
+
+            - name: Build site using Create React App
+              env:
+                  CI: false # To prevent taking warnings as errors
+              run: |
+                  # Build page
+                  sudo apt-get update
+                  sudo apt-get install nodejs npm
+                  npx create-react-app anushka-twitter-clone
+                  cd anushka-twitter-clone
+                  rm -rf public src package-lock.json package.json
+                  cd ..
+                  sudo mv public anushka-twitter-clone
+                  sudo mv src anushka-twitter-clone
+                  sudo mv package-lock.json ./anushka-twitter-clone
+                  sudo mv package.json ./anushka-twitter-clone
+                  cd anushka-twitter-clone
+                  npm install
+                  npm run build
+                  cd build
+                  mv * ../../
+                  cd ../..
+                  rm -rf anushka-twitter-clone
+
+            - name: Deploy to GitHub Pages
+              run: |
+                  # Skip deploy if not on main
+                  BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+                  if [ "${BRANCH_NAME}" != "main" ]; then
+                    echo "Skipping deployment since branch is '${BRANCH_NAME}', not main"
+                    exit 0
+                  fi
+
+                  # Add modified files
+                  git add .
+
+                  # Set user
+                  git config user.name  "Auto deploy GitHub Pages"
+                  git config user.email "cd-deploy-gh-pages@bot"
+
+                  # Commit changes
+                  git commit -m "Deploy to pages: $(date +'%Y-%m-%d %T')"
+
+                  # Remove 'https://' from beginning of REPOSITORY_URL
+                  REPOSITORY_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+                  git push "https://X-Access-Token:${{ secrets.GITHUB_TOKEN }}@${REPOSITORY_URL:8}" gh-pages
