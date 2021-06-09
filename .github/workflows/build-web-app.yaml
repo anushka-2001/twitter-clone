@@ -20,7 +20,7 @@ jobs:
         steps:
             - name: Checkout code
               run: |
-                  # Set repository Url
+                  # Set repository URL
                   REPOSITORY_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
                   BRANCH_NAME="${GITHUB_REF#refs/heads/}"
 
